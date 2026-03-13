@@ -1,0 +1,43 @@
+package dev.jozott.leaktest.example
+
+import dev.jozott.leaktest.LeakCheck
+import dev.jozott.leaktest.leakCheckedTest
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.IntVar
+import kotlinx.cinterop.alloc
+import kotlinx.cinterop.nativeHeap
+import kotlinx.cinterop.rawPtr
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.OsFamily
+import kotlin.native.Platform
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+@OptIn(ExperimentalNativeApi::class, ExperimentalForeignApi::class)
+class LeakExampleTest {
+    @Test
+    fun freesNativeAllocation() {
+        leakCheckedTest("freesNativeAllocation") {
+            val value = nativeHeap.alloc<IntVar>()
+            nativeHeap.free(value.rawPtr)
+        }
+    }
+
+    @LeakCheck
+    @Test
+    fun detectsLeakedNativeAllocation() {
+        if (Platform.osFamily == OsFamily.MACOSX) {
+            // Apple ASan links the LSan symbols but does not surface the recoverable leak check on this host runtime.
+            return
+        }
+
+        val failure = assertFailsWith<IllegalStateException> {
+            leakCheckedTest("detectsLeakedNativeAllocation") {
+                nativeHeap.alloc<IntVar>()
+            }
+        }
+
+        assertTrue(failure.message?.contains("Memory leak detected") == true)
+    }
+}
