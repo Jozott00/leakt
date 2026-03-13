@@ -2,13 +2,15 @@ package dev.jozott.leakt.gradle
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.*
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink
 import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 import java.io.File
 
-class LeaktPlugin : Plugin<Project> {
+class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
     override fun apply(project: Project) {
         project.pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
             val kotlin = project.extensions.getByType(KotlinMultiplatformExtension::class.java)
@@ -18,6 +20,35 @@ class LeaktPlugin : Plugin<Project> {
             configureNativeLinks(project)
             configureNativeTests(project)
         }
+    }
+
+    override fun isApplicable(kotlinCompilation: KotlinCompilation<*>): Boolean {
+        return kotlinCompilation.target is KotlinNativeTarget && kotlinCompilation.name == "test"
+    }
+
+    override fun getCompilerPluginId(): String = "dev.jozott.leakt"
+
+    override fun getPluginArtifact(): SubpluginArtifact {
+        return SubpluginArtifact(
+            groupId = "dev.jozott.leakt",
+            artifactId = "compiler-plugin",
+            version = "0.1.0-SNAPSHOT"
+        )
+    }
+
+    override fun applyToCompilation(kotlinCompilation: KotlinCompilation<*>): Provider<List<SubpluginOption>> {
+        val project = kotlinCompilation.target.project
+
+        // Ensure the compiler plugin is available in the classpath for the compilation
+        val compilerPluginProject = project.rootProject.findProject(":compiler-plugin")
+        if (compilerPluginProject != null) {
+            project.dependencies.add(
+                "kotlinCompilerPluginClasspath${kotlinCompilation.target.name.replaceFirstChar { it.uppercase() }}${kotlinCompilation.name.replaceFirstChar { it.uppercase() }}",
+                compilerPluginProject
+            )
+        }
+
+        return project.provider { emptyList<SubpluginOption>() }
     }
 
     private fun configureRuntimeDependency(

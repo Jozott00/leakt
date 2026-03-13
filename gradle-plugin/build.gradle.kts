@@ -8,6 +8,7 @@ version = "0.1.0-SNAPSHOT"
 
 dependencies {
     compileOnly(libs.kotlin.gradle.plugin)
+    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
 }
 
 gradlePlugin {

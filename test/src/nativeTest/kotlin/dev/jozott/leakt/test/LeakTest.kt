@@ -17,27 +17,27 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalNativeApi::class, ExperimentalForeignApi::class)
 class LeakTest {
     @Test
+    @LeakCheck
     fun freesNativeAllocation() {
-        leakCheckedTest("freesNativeAllocation") {
-            val value = nativeHeap.alloc<IntVar>()
-            nativeHeap.free(value.rawPtr)
-        }
+        val value = nativeHeap.alloc<IntVar>()
+        nativeHeap.free(value.rawPtr)
     }
 
-    @Test
+
     @LeakCheck
-    fun detectsLeakedNativeAllocation() {
+    fun detectsLeakedNativeAllocationWithAnnotation() {
         if (Platform.osFamily == OsFamily.MACOSX) {
             // Apple ASan links the LSan symbols but does not surface the recoverable leak check on this host runtime.
             return
         }
 
-        val failure = assertFailsWith<IllegalStateException> {
-            leakCheckedTest("detectsLeakedNativeAllocation") {
-                nativeHeap.alloc<IntVar>()
-            }
-        }
+        nativeHeap.alloc<IntVar>()
+    }
 
-        assertTrue(failure.message?.contains("Memory leak detected") == true)
+    @Test
+    fun assertDetectedLeakFails() {
+        assertFailsWith<IllegalStateException> {
+            detectsLeakedNativeAllocationWithAnnotation()
+        }
     }
 }

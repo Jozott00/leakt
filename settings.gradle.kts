@@ -15,4 +15,5 @@ dependencyResolutionManagement {
 rootProject.name = "leakt"
 
 include(":core")
+include(":compiler-plugin")
 include(":test")

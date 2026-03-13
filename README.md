@@ -28,8 +28,8 @@ The runtime disables LSan by default and only enables it around the code passed 
 ## Example Usage
 
 ```kotlin
-@LeakCheck
 @Test
+@LeakCheck
 fun detectsLeakedNativeAllocation() {
     leakCheckedTest("detectsLeakedNativeAllocation") {
         nativeHeap.alloc<IntVar>()
