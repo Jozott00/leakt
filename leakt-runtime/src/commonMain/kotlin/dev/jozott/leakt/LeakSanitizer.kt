@@ -1,4 +1,4 @@
-package dev.jozott.leaktest
+package dev.jozott.leakt
 
 public expect object LeakSanitizer {
     public fun disable()

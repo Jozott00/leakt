@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
-    id("dev.jozott.leaktest")
+    id("dev.jozott.leakt")
 }
 
 kotlin {

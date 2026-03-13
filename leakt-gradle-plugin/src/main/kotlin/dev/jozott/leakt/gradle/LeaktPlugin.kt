@@ -1,4 +1,4 @@
-package dev.jozott.leaktest.gradle
+package dev.jozott.leakt.gradle
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -8,7 +8,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink
 import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 import java.io.File
 
-class LeakTestPlugin : Plugin<Project> {
+class LeaktPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         project.pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
             val kotlin = project.extensions.getByType(KotlinMultiplatformExtension::class.java)
@@ -24,9 +24,9 @@ class LeakTestPlugin : Plugin<Project> {
         project: Project,
         kotlin: KotlinMultiplatformExtension,
     ) {
-        val runtimeDependency = project.rootProject.findProject(":leaktest-runtime")?.let {
-            project.dependencies.project(mapOf("path" to ":leaktest-runtime"))
-        } ?: "dev.jozott.leaktest:leaktest-runtime:${project.version}"
+        val runtimeDependency = project.rootProject.findProject(":leakt-runtime")?.let {
+            project.dependencies.project(mapOf("path" to ":leakt-runtime"))
+        } ?: "dev.jozott.leakt:leakt-runtime:${project.version}"
 
         kotlin.sourceSets.matching { it.name.endsWith("Test") }.all { sourceSet ->
             project.dependencies.add(sourceSet.implementationConfigurationName, runtimeDependency)

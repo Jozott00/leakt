@@ -33,6 +33,6 @@ kotlin.targets.withType<KotlinNativeTarget>().configureEach {
     compilations.getByName("main").cinterops.create("lsan") {
         defFile(project.file("src/nativeInterop/cinterop/lsan.def"))
         compilerOpts("-I${project.file("src/nativeInterop/cinterop").absolutePath}")
-        packageName("dev.jozott.leaktest.lsan")
+        packageName("dev.jozott.leakt.lsan")
     }
 }

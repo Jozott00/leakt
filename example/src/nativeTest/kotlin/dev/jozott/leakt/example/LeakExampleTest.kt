@@ -1,7 +1,7 @@
-package dev.jozott.leaktest.example
+package dev.jozott.leakt.example
 
-import dev.jozott.leaktest.LeakCheck
-import dev.jozott.leaktest.leakCheckedTest
+import dev.jozott.leakt.LeakCheck
+import dev.jozott.leakt.leakCheckedTest
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.alloc

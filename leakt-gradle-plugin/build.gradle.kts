@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
 }
 
-group = "dev.jozott.leaktest"
+group = "dev.jozott.leakt"
 version = "0.1.0-SNAPSHOT"
 
 dependencies {
@@ -12,10 +12,10 @@ dependencies {
 
 gradlePlugin {
     plugins {
-        create("leaktest") {
-            id = "dev.jozott.leaktest"
-            implementationClass = "dev.jozott.leaktest.gradle.LeakTestPlugin"
-            displayName = "LeakTest plugin"
+        create("leakt") {
+            id = "dev.jozott.leakt"
+            implementationClass = "dev.jozott.leakt.gradle.LeaktPlugin"
+            displayName = "Leakt plugin"
             description = "Enables LSan-backed per-test leak checks for Kotlin/Native test binaries."
         }
     }

@@ -1,4 +1,4 @@
-package dev.jozott.leaktest
+package dev.jozott.leakt
 
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)

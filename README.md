@@ -1,11 +1,11 @@
-# LeakTest
+# Leakt
 
-`LeakTest` is a first working prototype of a Kotlin/Native runtime library plus Gradle plugin that uses LLVM LeakSanitizer (LSan) to detect native leaks inside the test process.
+`Leakt` is a first working prototype of a Kotlin/Native runtime library plus Gradle plugin that uses LLVM LeakSanitizer (LSan) to detect native leaks inside the test process.
 
 The project has three components:
 
-- `leaktest-runtime`: Kotlin Multiplatform runtime with LSan bindings and a Kotlin API.
-- `leaktest-gradle-plugin`: Gradle plugin that enables sanitizer flags and injects the runtime dependency into native test source sets.
+- `leakt-runtime`: Kotlin Multiplatform runtime with LSan bindings and a Kotlin API.
+- `leakt-gradle-plugin`: Gradle plugin that enables sanitizer flags and injects the runtime dependency into native test source sets.
 - `example`: Sample Kotlin/Native test project that demonstrates leak detection with C interop allocations.
 
 ## Requirements
@@ -17,7 +17,7 @@ The project has three components:
 
 ## How It Works
 
-`LeakTest` wraps the following LeakSanitizer APIs through Kotlin/Native cinterop:
+`Leakt` wraps the following LeakSanitizer APIs through Kotlin/Native cinterop:
 
 - `__lsan_do_recoverable_leak_check`
 - `__lsan_disable`
@@ -49,7 +49,7 @@ Useful follow-up commands:
 
 ```bash
 ./gradlew :example:allTests
-./gradlew :leaktest-runtime:publishToMavenLocal
+./gradlew :leakt-runtime:publishToMavenLocal
 ```
 
 ## Limitations

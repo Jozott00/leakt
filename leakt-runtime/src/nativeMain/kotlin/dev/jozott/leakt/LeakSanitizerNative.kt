@@ -1,8 +1,8 @@
-package dev.jozott.leaktest
+package dev.jozott.leakt
 
-import dev.jozott.leaktest.lsan.__lsan_disable
-import dev.jozott.leaktest.lsan.__lsan_do_recoverable_leak_check
-import dev.jozott.leaktest.lsan.__lsan_enable
+import dev.jozott.leakt.lsan.__lsan_disable
+import dev.jozott.leakt.lsan.__lsan_do_recoverable_leak_check
+import dev.jozott.leakt.lsan.__lsan_enable
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
