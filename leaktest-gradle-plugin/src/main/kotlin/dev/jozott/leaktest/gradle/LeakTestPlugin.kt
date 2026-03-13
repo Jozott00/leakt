@@ -37,10 +37,7 @@ class LeakTestPlugin : Plugin<Project> {
         kotlin.targets.withType(KotlinNativeTarget::class.java).all { target ->
             target.binaries.all { binary ->
                 binary.freeCompilerArgs = binary.freeCompilerArgs + sanitizerCompilerArgs(target)
-                if (target.konanTarget.name.lowercase().startsWith("macos_")) {
-                    val runtime = resolveBundledAsanRuntimePath()
-                    binary.linkerOpts(runtime.absolutePath, "-rpath", runtime.parentFile.absolutePath)
-                }
+                binary.linkerOpts(*sanitizerLinkerArgs(target).toTypedArray())
             }
         }
     }
@@ -99,6 +96,21 @@ class LeakTestPlugin : Plugin<Project> {
         return listOf("-Xoverride-clang-options=${clangOptions.joinToString(",")}")
     }
 
+    private fun sanitizerLinkerArgs(target: KotlinNativeTarget): List<String> {
+        val konanTarget = target.konanTarget.name.lowercase()
+
+        return buildList {
+            if (konanTarget.startsWith("macos_")) {
+                val runtime = resolveBundledAsanRuntimePath()
+                add(runtime.absolutePath)
+                add("-rpath")
+                add(runtime.parentFile.absolutePath)
+            } else if (konanTarget == "linux_x64") {
+                add(resolveBundledLinuxAsanRuntimePath().absolutePath)
+            }
+        }
+    }
+
     private fun configureNativeLinks(project: Project) {
         project.tasks.withType(KotlinNativeLink::class.java).configureEach { task ->
             if (task.name.contains("Macos", ignoreCase = true)) {
@@ -142,5 +154,29 @@ class LeakTestPlugin : Plugin<Project> {
             ?: error("Unable to locate the bundled clang resource directory under ${clangRoot.absolutePath}")
 
         return latestVersionDir.resolve("lib/darwin/libclang_rt.asan_osx_dynamic.dylib")
+    }
+
+    private fun resolveBundledLinuxAsanRuntimePath(): File {
+        return resolveBundledLinuxClangRuntimeDir().resolve("libclang_rt.asan.a")
+    }
+
+    private fun resolveBundledLinuxClangRuntimeDir(): File {
+        val dependenciesRoot = File(File(System.getProperty("user.home")), ".konan/dependencies")
+        val llvmRoot = dependenciesRoot
+            .listFiles { file -> file.isDirectory && file.name.startsWith("llvm-") && file.name.contains("linux-essentials") }
+            ?.maxByOrNull { it.name }
+            ?: error("Unable to locate the bundled Linux Kotlin/Native LLVM directory under ${dependenciesRoot.absolutePath}")
+        val clangRoot = llvmRoot.resolve("lib/clang")
+        val latestVersionDir = clangRoot
+            .listFiles { file -> file.isDirectory }
+            ?.maxByOrNull { it.name }
+            ?: error("Unable to locate the bundled clang resource directory under ${clangRoot.absolutePath}")
+        val runtimeDir = latestVersionDir.resolve("lib/x86_64-unknown-linux-gnu")
+
+        if (!runtimeDir.isDirectory) {
+            error("Unable to locate the Linux sanitizer runtime directory under ${latestVersionDir.absolutePath}")
+        }
+
+        return runtimeDir
     }
 }
