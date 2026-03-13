@@ -8,6 +8,12 @@ The project has three components:
 - `gradle-plugin`: Gradle plugin that enables sanitizer flags and injects the runtime dependency into native test source sets.
 - `test`: Sample Kotlin/Native test project that demonstrates leak detection with C interop allocations.
 
+## Current Scope
+
+`Leakt` currently targets Kotlin/Native **test** compilations/source sets only.  
+The Gradle plugin applies compiler instrumentation and sanitizer wiring for native test code, that influences performance
+negatively.
+
 ## Requirements
 
 - Kotlin `2.3.10`
@@ -23,7 +29,10 @@ The project has three components:
 - `__lsan_disable`
 - `__lsan_enable`
 
-The runtime disables LSan by default and only enables it around the code passed to `withLeakCheck`. After the block finishes, it performs an in-process recoverable leak check and throws an `IllegalStateException` when LSan reports leaked native memory.
+The runtime disables LSan by default and enables it only for the body passed to `withLeakCheck`.  
+After the body finishes, it performs an in-process recoverable leak check and throws `LeakDetectedException` if leaks are reported.
+
+The compiler plugin rewrites `@LeakCheck` functions to call `withLeakCheck(reporting) { ... }`.
 
 ## Example Usage
 
@@ -31,23 +40,37 @@ The runtime disables LSan by default and only enables it around the code passed 
 @Test
 @LeakCheck
 fun detectsLeakedNativeAllocation() {
-    withLeakCheck {
-        nativeHeap.alloc<IntVar>()
-    }
+    nativeHeap.alloc<IntVar>()
 }
 ```
 
-`@LeakCheck` supports reporting policy:
+Manual usage without annotation:
 
 ```kotlin
-@LeakCheck(reporting = LeakReporting.REPEAT)
-@Test
-fun alwaysReportLeaks() { /* ... */ }
+withLeakCheck {
+    nativeHeap.alloc<IntVar>()
+}
+```
+
+`@LeakCheck` and `withLeakCheck` both support reporting policy:
+
+```kotlin
+withLeakCheck(reporting = LeakReporting.REPEAT) {
+    /* ... */
+}
 ```
 
 `FIRST_ONLY` (default) suppresses repeated reports after the first detected leak in the same process.
 
-The included test keeps the build green by asserting that the helper throws when a leak is detected. If you want to see a hard test failure instead, remove the `assertFailsWith` wrapper in the test.
+## Important Constraint
+
+Nesting leak scopes is not allowed:
+
+- Do not call `withLeakCheck` inside another `withLeakCheck`.
+- Do not call `withLeakCheck` around an `@LeakCheck` function.
+- Do not call an `@LeakCheck` function from inside another `@LeakCheck` function.
+
+If this happens, runtime state can become inconsistent and leak checking will fail fast.
 
 ## Running The Prototype
 
@@ -65,6 +88,5 @@ Useful follow-up commands:
 ## Limitations
 
 - Once a test leaks native memory, later in-process leak checks may still observe that leak until the test process exits.
-- The plugin currently enables AddressSanitizer/LeakSanitizer with straightforward compiler and linker flags; it is intended as a readable prototype rather than a production-hardened integration.
-- On the current Apple toolchain, the sanitizer runtime links but does not surface recoverable leak checks reliably. The macOS test therefore keeps the build runnable and reserves the full per-test leak assertion for Linux targets.
-- Windows is intentionally out of scope for the prototype.
+- Leak reports are process-global; there is no runtime reset for already observed leaks.
+- On non-`linuxX64` fallback targets, `withLeakCheck` is currently a no-op.

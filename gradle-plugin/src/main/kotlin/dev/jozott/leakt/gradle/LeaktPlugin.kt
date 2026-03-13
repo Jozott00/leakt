@@ -6,7 +6,6 @@ import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.*
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink
 import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 import java.io.File
 
@@ -15,15 +14,19 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
         project.pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
             val kotlin = project.extensions.getByType(KotlinMultiplatformExtension::class.java)
 
+            // The Gradle plugin has two responsibilities:
+            // 1. make the Leakt runtime available to test source sets
+            // 2. wire Linux native test binaries/tasks for LeakSanitizer execution
             configureRuntimeDependency(project, kotlin)
             configureNativeTargets(kotlin)
-            configureNativeLinks(project)
             configureNativeTests(project)
         }
     }
 
     override fun isApplicable(kotlinCompilation: KotlinCompilation<*>): Boolean {
-        return kotlinCompilation.target is KotlinNativeTarget && kotlinCompilation.name == "test"
+        val target = kotlinCompilation.target as? KotlinNativeTarget ?: return false
+        // The prototype currently only supports Linux native test compilations.
+        return target.konanTarget.name.lowercase() == "linux_x64" && kotlinCompilation.name == "test"
     }
 
     override fun getCompilerPluginId(): String = "dev.jozott.leakt"
@@ -39,7 +42,8 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
     override fun applyToCompilation(kotlinCompilation: KotlinCompilation<*>): Provider<List<SubpluginOption>> {
         val project = kotlinCompilation.target.project
 
-        // Ensure the compiler plugin is available in the classpath for the compilation
+        // When building from the monorepo, use the local compiler plugin project directly so
+        // test compilations can resolve it without publishing first.
         val compilerPluginProject = project.rootProject.findProject(":compiler-plugin")
         if (compilerPluginProject != null) {
             project.dependencies.add(
@@ -55,10 +59,14 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
         project: Project,
         kotlin: KotlinMultiplatformExtension,
     ) {
+        // LeakSanitizer access lives in :core. Prefer the local project in this repository, but
+        // fall back to a published artifact when the plugin is consumed externally.
         val runtimeDependency = project.rootProject.findProject(":core")?.let {
             project.dependencies.project(mapOf("path" to ":core"))
         } ?: "dev.jozott.leakt:core:${project.version}"
 
+        // Add the runtime to every test source set so both manual `withLeakCheck` calls and
+        // compiler-rewritten `@LeakCheck` usages can resolve the runtime symbols.
         kotlin.sourceSets.matching { it.name.endsWith("Test") }.all { sourceSet ->
             project.dependencies.add(sourceSet.implementationConfigurationName, runtimeDependency)
         }
@@ -66,132 +74,48 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
 
     private fun configureNativeTargets(kotlin: KotlinMultiplatformExtension) {
         kotlin.targets.withType(KotlinNativeTarget::class.java).all { target ->
+            val isLinuxX64 = target.konanTarget.name.lowercase() == "linux_x64"
             target.binaries.all { binary ->
-                binary.freeCompilerArgs = binary.freeCompilerArgs + sanitizerCompilerArgs(target)
-                binary.linkerOpts(*sanitizerLinkerArgs(target).toTypedArray())
+                val isTestBinary = binary.name.contains("test", ignoreCase = true)
+                if (isLinuxX64 && isTestBinary) {
+                    // Kotlin/Native links the final executable via ld.lld, not via the Clang
+                    // driver, so `-fsanitize=address` is not enough to pull in the sanitizer
+                    // runtime automatically. We therefore add the bundled ASan runtime archive
+                    // explicitly for Linux test binaries.
+                    binary.linkerOpts(*sanitizerLinkerArgs(target).toTypedArray())
+                }
             }
         }
     }
 
     private fun configureNativeTests(project: Project) {
         project.tasks.withType(KotlinNativeTest::class.java).configureEach { task ->
-            if (task.name.contains("Macos", ignoreCase = true)) {
-                task.environment("ASAN_OPTIONS", "halt_on_error=0")
-            } else {
-                task.environment("ASAN_OPTIONS", "detect_leaks=1:halt_on_error=0:leak_check_at_exit=0")
-            }
+            if (!task.name.contains("LinuxX64", ignoreCase = true)) return@configureEach
+            // Leak checking is performed explicitly through the Leakt runtime, so disable the
+            // default process-exit leak check and keep test failures reportable in-process.
+            task.environment("ASAN_OPTIONS", "detect_leaks=1:halt_on_error=0:leak_check_at_exit=0")
             task.environment("LSAN_OPTIONS", "exitcode=0")
         }
-    }
-
-    private fun sanitizerCompilerArgs(target: KotlinNativeTarget): List<String> {
-        val konanTarget = target.konanTarget.name.lowercase()
-
-        val clangOptions = when (konanTarget) {
-            "macos_arm64" -> listOf(
-                "-cc1",
-                "-emit-obj",
-                "-disable-llvm-passes",
-                "-x",
-                "ir",
-                "-O0",
-                "-mllvm",
-                "-fast-isel=false",
-                "-mllvm",
-                "-global-isel=false",
-                "-fsanitize=address",
-            )
-            "macos_x64" -> listOf(
-                "-cc1",
-                "-emit-obj",
-                "-disable-llvm-passes",
-                "-x",
-                "ir",
-                "-O0",
-                "-fsanitize=address",
-            )
-            "linux_x64" -> listOf(
-                "-cc1",
-                "-emit-obj",
-                "-disable-llvm-optzns",
-                "-x",
-                "ir",
-                "-ffunction-sections",
-                "-fdata-sections",
-                "-O0",
-                "-fsanitize=address",
-            )
-            else -> listOf("-fsanitize=address")
-        }
-
-        return listOf("-Xoverride-clang-options=${clangOptions.joinToString(",")}")
     }
 
     private fun sanitizerLinkerArgs(target: KotlinNativeTarget): List<String> {
         val konanTarget = target.konanTarget.name.lowercase()
 
         return buildList {
-            if (konanTarget.startsWith("macos_")) {
-                val runtime = resolveBundledAsanRuntimePath()
-                add(runtime.absolutePath)
-                add("-rpath")
-                add(runtime.parentFile.absolutePath)
-            } else if (konanTarget == "linux_x64") {
+            if (konanTarget == "linux_x64") {
                 add(resolveBundledLinuxAsanRuntimePath().absolutePath)
             }
         }
     }
 
-    private fun configureNativeLinks(project: Project) {
-        project.tasks.withType(KotlinNativeLink::class.java).configureEach { task ->
-            if (task.name.contains("Macos", ignoreCase = true)) {
-                task.doFirst {
-                    installMacOsAsanRuntime()
-                }
-            }
-        }
-    }
-
-    private fun installMacOsAsanRuntime() {
-        val sourceRuntime = resolveXcodeAsanRuntime()
-        val destinationRuntime = resolveBundledAsanRuntimePath()
-
-        if (!destinationRuntime.exists()) {
-            destinationRuntime.parentFile.mkdirs()
-            sourceRuntime.copyTo(destinationRuntime, overwrite = false)
-        }
-    }
-
-    private fun resolveXcodeAsanRuntime(): File {
-        val runtimeRoot = File("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang")
-        val latestResourceDir = runtimeRoot
-            .listFiles { file -> file.isDirectory }
-            ?.maxByOrNull { it.name }
-            ?: error("Unable to locate the Xcode clang resource directory under ${runtimeRoot.absolutePath}")
-
-        return latestResourceDir.resolve("lib/darwin/libclang_rt.asan_osx_dynamic.dylib")
-    }
-
-    private fun resolveBundledAsanRuntimePath(): File {
-        val dependenciesRoot = File(File(System.getProperty("user.home")), ".konan/dependencies")
-        val llvmRoot = dependenciesRoot
-            .listFiles { file -> file.isDirectory && file.name.startsWith("llvm-") && file.name.contains("macos-essentials") }
-            ?.maxByOrNull { it.name }
-            ?: error("Unable to locate the bundled Kotlin/Native LLVM directory under ${dependenciesRoot.absolutePath}")
-        val clangRoot = llvmRoot.resolve("lib/clang")
-        val latestVersionDir = clangRoot
-            .listFiles { file -> file.isDirectory }
-            ?.maxByOrNull { it.name }
-            ?: error("Unable to locate the bundled clang resource directory under ${clangRoot.absolutePath}")
-
-        return latestVersionDir.resolve("lib/darwin/libclang_rt.asan_osx_dynamic.dylib")
-    }
-
     private fun resolveBundledLinuxAsanRuntimePath(): File {
+        // LeakSanitizer is provided through the AddressSanitizer runtime on Linux.
         return resolveBundledLinuxClangRuntimeDir().resolve("libclang_rt.asan.a")
     }
 
     private fun resolveBundledLinuxClangRuntimeDir(): File {
+        // Kotlin/Native ships its own LLVM toolchain under ~/.konan/dependencies. Reuse that
+        // bundled runtime so the linked sanitizer matches the compiler toolchain in use.
         val dependenciesRoot = File(File(System.getProperty("user.home")), ".konan/dependencies")
         val llvmRoot = dependenciesRoot
             .listFiles { file -> file.isDirectory && file.name.startsWith("llvm-") && file.name.contains("linux-essentials") }
