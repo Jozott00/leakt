@@ -12,4 +12,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "leakt-gradle-plugin"
+rootProject.name = "gradle-plugin"

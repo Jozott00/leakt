@@ -3,7 +3,7 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
-    includeBuild("leakt-gradle-plugin")
+    includeBuild("gradle-plugin")
 }
 
 dependencyResolutionManagement {
@@ -14,5 +14,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "leakt"
 
-include(":leakt-runtime")
-include(":example")
+include(":core")
+include(":test")

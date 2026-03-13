@@ -1,4 +1,4 @@
-package dev.jozott.leakt.example
+package dev.jozott.leakt.test
 
 import dev.jozott.leakt.LeakCheck
 import dev.jozott.leakt.leakCheckedTest
@@ -15,7 +15,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalNativeApi::class, ExperimentalForeignApi::class)
-class LeakExampleTest {
+class LeakTest {
     @Test
     fun freesNativeAllocation() {
         leakCheckedTest("freesNativeAllocation") {
@@ -24,8 +24,8 @@ class LeakExampleTest {
         }
     }
 
-    @LeakCheck
     @Test
+    @LeakCheck
     fun detectsLeakedNativeAllocation() {
         if (Platform.osFamily == OsFamily.MACOSX) {
             // Apple ASan links the LSan symbols but does not surface the recoverable leak check on this host runtime.

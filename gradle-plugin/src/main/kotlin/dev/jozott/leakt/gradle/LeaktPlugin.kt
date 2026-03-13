@@ -24,9 +24,9 @@ class LeaktPlugin : Plugin<Project> {
         project: Project,
         kotlin: KotlinMultiplatformExtension,
     ) {
-        val runtimeDependency = project.rootProject.findProject(":leakt-runtime")?.let {
-            project.dependencies.project(mapOf("path" to ":leakt-runtime"))
-        } ?: "dev.jozott.leakt:leakt-runtime:${project.version}"
+        val runtimeDependency = project.rootProject.findProject(":core")?.let {
+            project.dependencies.project(mapOf("path" to ":core"))
+        } ?: "dev.jozott.leakt:core:${project.version}"
 
         kotlin.sourceSets.matching { it.name.endsWith("Test") }.all { sourceSet ->
             project.dependencies.add(sourceSet.implementationConfigurationName, runtimeDependency)
