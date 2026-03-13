@@ -7,8 +7,13 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
 
+/**
+ * Low-level LeakSanitizer runtime bridge.
+ *
+ * Use [withLeakCheck] for the high-level API unless fine-grained control is required.
+ */
 @OptIn(ExperimentalForeignApi::class, NativeRuntimeApi::class)
-public actual object LeakSanitizer {
+public object LeakSanitizer {
     // LSan state is process-global; this flag mirrors policy handling in-process.
     private var leakAlreadyReported: Boolean = false
     private var disableDepth: Int = 0
@@ -17,12 +22,18 @@ public actual object LeakSanitizer {
         disable()
     }
 
-    public actual fun disable() {
+    /**
+     * Disables leak tracking for the current thread.
+     */
+    public fun disable() {
         __lsan_disable()
         disableDepth += 1
     }
 
-    public actual fun enable() {
+    /**
+     * Enables leak tracking for the current thread.
+     */
+    public fun enable() {
         check(disableDepth > 0) {
             "Unmatched call to LeakSanitizer.enable(): leak tracking is already enabled. " +
                 "Do not nest leak scopes (for example, calling withLeakCheck around an @LeakCheck function), " +
@@ -32,7 +43,12 @@ public actual object LeakSanitizer {
         disableDepth -= 1
     }
 
-    public actual fun checkLeaks(reporting: LeakReporting): Boolean {
+    /**
+     * Performs a recoverable leak check.
+     *
+     * Returns `true` if leaks should be reported under the given [reporting] policy.
+     */
+    public fun checkLeaks(reporting: LeakReporting): Boolean {
         if (reporting == LeakReporting.FIRST_ONLY && leakAlreadyReported) {
             return false
         }
@@ -45,7 +61,14 @@ public actual object LeakSanitizer {
         return leakDetected
     }
 
-    public actual fun scope(reporting: LeakReporting, block: () -> Unit): Boolean {
+    /**
+     * Runs [block] with leak tracking enabled, then performs [checkLeaks].
+     *
+     * Nesting calls to [scope] is not allowed.
+     *
+     * Returns `true` if leaks should be reported.
+     */
+    public fun scope(reporting: LeakReporting, block: () -> Unit): Boolean {
         val toggled = disableDepth > 0
         if (toggled) enable()
         try {
