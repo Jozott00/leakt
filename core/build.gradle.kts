@@ -6,6 +6,9 @@ plugins {
 
 kotlin {
     explicitApi()
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
 
     linuxX64()
     macosX64()

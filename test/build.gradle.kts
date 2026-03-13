@@ -17,13 +17,16 @@ kotlin {
     }
 
     sourceSets {
-        val commonTest by getting {
+        commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
             }
         }
-        val nativeTest by creating {
-            dependsOn(commonTest)
+
+        nativeTest {
+            dependencies {
+                implementation(libs.kotlinx.coroutines)
+            }
         }
     }
 }

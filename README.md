@@ -23,7 +23,7 @@ The project has three components:
 - `__lsan_disable`
 - `__lsan_enable`
 
-The runtime disables LSan by default and only enables it around the code passed to `leakCheckedTest`. After the block finishes, it performs an in-process recoverable leak check and throws an `IllegalStateException` when LSan reports leaked native memory.
+The runtime disables LSan by default and only enables it around the code passed to `withLeakCheck`. After the block finishes, it performs an in-process recoverable leak check and throws an `IllegalStateException` when LSan reports leaked native memory.
 
 ## Example Usage
 
@@ -31,11 +31,21 @@ The runtime disables LSan by default and only enables it around the code passed 
 @Test
 @LeakCheck
 fun detectsLeakedNativeAllocation() {
-    leakCheckedTest("detectsLeakedNativeAllocation") {
+    withLeakCheck {
         nativeHeap.alloc<IntVar>()
     }
 }
 ```
+
+`@LeakCheck` supports reporting policy:
+
+```kotlin
+@LeakCheck(reporting = LeakReporting.REPEAT)
+@Test
+fun alwaysReportLeaks() { /* ... */ }
+```
+
+`FIRST_ONLY` (default) suppresses repeated reports after the first detected leak in the same process.
 
 The included test keeps the build green by asserting that the helper throws when a leak is detected. If you want to see a hard test failure instead, remove the `assertFailsWith` wrapper in the test.
 
@@ -54,7 +64,6 @@ Useful follow-up commands:
 
 ## Limitations
 
-- This MVP uses the `@LeakCheck` annotation as a marker only; tests still call `leakCheckedTest(...)` manually because `kotlin.test` does not expose a lightweight native extension point for auto-wrapping annotated tests.
 - Once a test leaks native memory, later in-process leak checks may still observe that leak until the test process exits.
 - The plugin currently enables AddressSanitizer/LeakSanitizer with straightforward compiler and linker flags; it is intended as a readable prototype rather than a production-hardened integration.
 - On the current Apple toolchain, the sanitizer runtime links but does not surface recoverable leak checks reliably. The macOS test therefore keeps the build runnable and reserves the full per-test leak assertion for Linux targets.

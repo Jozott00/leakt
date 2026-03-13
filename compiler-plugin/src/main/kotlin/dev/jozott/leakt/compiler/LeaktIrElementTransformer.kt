@@ -8,22 +8,30 @@ import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.*
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrBody
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
+import org.jetbrains.kotlin.ir.expressions.IrGetEnumValue
 import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.impl.IrFunctionExpressionImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrGetEnumValueImpl
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrReturnTargetSymbol
+import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.typeWith
+import org.jetbrains.kotlin.ir.util.getValueArgument
 import org.jetbrains.kotlin.ir.util.hasAnnotation
+import org.jetbrains.kotlin.ir.util.getAnnotation
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.name.SpecialNames
 
 class LeaktIrElementTransformer(private val pluginContext: IrPluginContext) : IrElementTransformerVoid() {
@@ -39,16 +47,20 @@ class LeaktIrElementTransformer(private val pluginContext: IrPluginContext) : Ir
     }
 
     private fun wrapWithLeakCheck(function: IrFunction, body: IrBody): IrBody {
-        val sanitizerClassId = ClassId.topLevel(LeaktNames.leakSanitizerClass)
-        val sanitizerClass = pluginContext.referenceClass(sanitizerClassId)
-            ?: error("Could not find LeakSanitizer class")
+        val leakReportingClassId = ClassId.topLevel(LeaktNames.leakReportingClass)
+        val leakReportingClass = pluginContext.referenceClass(leakReportingClassId)
+            ?: error("Could not find LeakReporting enum class")
 
-        val scopeFunctions = pluginContext.referenceFunctions(CallableId(sanitizerClassId, LeaktNames.scopeFunction))
-        val scopeFunction = scopeFunctions.firstOrNull {
+        val withLeakCheckFunctions = pluginContext.referenceFunctions(
+            CallableId(LeaktNames.leaktPackage, LeaktNames.withLeakCheckFunction)
+        )
+        val withLeakCheckFunction = withLeakCheckFunctions.firstOrNull {
             it.owner.parameters.count { parameter ->
                 parameter.kind == IrParameterKind.Context || parameter.kind == IrParameterKind.Regular
             } == 2
-        } ?: error("Could not find LeakSanitizer.scope(name, block). Found: ${scopeFunctions.map { it.owner.render() }}")
+        } ?: error("Could not find withLeakCheck(reporting, block). Found: ${withLeakCheckFunctions.map { it.owner.render() }}")
+
+        val reportingEnumValue = resolveReportingEnumValue(function, leakReportingClass)
 
         return DeclarationIrBuilder(pluginContext, function.symbol).irBlockBody {
             val lambdaFunction = context.irFactory.buildFun {
@@ -86,12 +98,37 @@ class LeaktIrElementTransformer(private val pluginContext: IrPluginContext) : Ir
                 IrStatementOrigin.LAMBDA
             )
 
-            +irCall(scopeFunction.owner.symbol).apply {
-                dispatchReceiver = irGetObject(sanitizerClass)
-                arguments[1] = irString(function.name.asString())
-                arguments[2] = lambdaExpression
+            +irCall(withLeakCheckFunction.owner.symbol).apply {
+                arguments[0] = reportingEnumValue
+                arguments[1] = lambdaExpression
             }
         }
+    }
+
+    private fun resolveReportingEnumValue(
+        function: IrFunction,
+        leakReportingClass: IrClassSymbol,
+    ): IrExpression {
+        val annotation = function.getAnnotation(LeaktNames.leakCheckAnnotation)
+        val explicitValue = annotation?.getValueArgument(LeaktNames.reportingArgument) as? IrGetEnumValue
+        val explicitEntryName = explicitValue?.symbol?.owner?.name
+        val selectedEntry = findLeakReportingEntry(leakReportingClass, explicitEntryName ?: LeaktNames.firstOnlyEnumEntry)
+            ?: error("Could not find LeakReporting.${explicitEntryName ?: LeaktNames.firstOnlyEnumEntry}")
+        return IrGetEnumValueImpl(
+            function.startOffset,
+            function.endOffset,
+            leakReportingClass.defaultType,
+            selectedEntry.symbol,
+        )
+    }
+
+    private fun findLeakReportingEntry(
+        leakReportingClass: IrClassSymbol,
+        entryName: Name,
+    ): IrEnumEntry? {
+        return leakReportingClass.owner.declarations
+            .filterIsInstance<IrEnumEntry>()
+            .firstOrNull { it.name == entryName }
     }
 
     private class ReturnTargetRemapper(
