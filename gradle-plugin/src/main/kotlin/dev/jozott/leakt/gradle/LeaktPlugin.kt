@@ -6,6 +6,7 @@ import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.*
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink
 import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 import java.io.File
 
@@ -28,7 +29,7 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
             // 1. make the Leakt runtime available to test source sets
             // 2. wire Linux native test binaries/tasks for LeakSanitizer execution
             configureRuntimeDependency(project, kotlin)
-            configureNativeTargets(kotlin)
+            configureNativeLinkTasks(project)
             configureNativeTests(project)
         }
     }
@@ -66,17 +67,23 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
         }
     }
 
-    private fun configureNativeTargets(kotlin: KotlinMultiplatformExtension) {
-        kotlin.targets.withType(KotlinNativeTarget::class.java).all { target ->
-            val isLinuxX64 = target.konanTarget.name.lowercase() == "linux_x64"
-            target.binaries.all { binary ->
-                val isTestBinary = binary.name.contains("test", ignoreCase = true)
-                if (isLinuxX64 && isTestBinary) {
-                    // Kotlin/Native links the final executable via ld.lld, not via the Clang
-                    // driver, so `-fsanitize=address` is not enough to pull in the sanitizer
-                    // runtime automatically. We therefore add the bundled ASan runtime archive
-                    // explicitly for Linux test binaries.
-                    binary.linkerOpts(*sanitizerLinkerArgs(target).toTypedArray())
+    private fun configureNativeLinkTasks(project: Project) {
+        project.tasks.withType(KotlinNativeLink::class.java).configureEach { task ->
+            if (task.target.lowercase() != "linux_x64") return@configureEach
+            if (!task.binary.name.contains("test", ignoreCase = true)) return@configureEach
+
+            task.dependsOn("downloadKotlinNativeDistribution")
+            task.doFirst {
+                // Kotlin/Native links the final executable via ld.lld, not via the Clang
+                // driver, so `-fsanitize=address` is not enough to pull in the sanitizer
+                // runtime automatically. Resolve the bundled ASan archive only once the
+                // Kotlin/Native distribution has been downloaded.
+                val asanRuntime = resolveBundledLinuxAsanRuntimePath().absolutePath
+
+                @Suppress("UNCHECKED_CAST")
+                val linkerOpts = task.linkerOpts as MutableList<String>
+                if (asanRuntime !in linkerOpts) {
+                    linkerOpts.add(asanRuntime)
                 }
             }
         }
@@ -89,16 +96,6 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
             // default process-exit leak check and keep test failures reportable in-process.
             task.environment("ASAN_OPTIONS", "detect_leaks=1:halt_on_error=0:leak_check_at_exit=0")
             task.environment("LSAN_OPTIONS", "exitcode=0")
-        }
-    }
-
-    private fun sanitizerLinkerArgs(target: KotlinNativeTarget): List<String> {
-        val konanTarget = target.konanTarget.name.lowercase()
-
-        return buildList {
-            if (konanTarget == "linux_x64") {
-                add(resolveBundledLinuxAsanRuntimePath().absolutePath)
-            }
         }
     }
 
