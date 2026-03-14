@@ -10,7 +10,7 @@ import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 import java.io.File
 
 class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
-    private val compilerPluginVersion: String by lazy(LazyThreadSafetyMode.NONE) {
+    private val leaktVersion: String by lazy(LazyThreadSafetyMode.NONE) {
         javaClass
             .getResourceAsStream("/dev/jozott/leakt/gradle/leakt.properties")
             ?.use { stream ->
@@ -45,35 +45,19 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
         return SubpluginArtifact(
             groupId = "dev.jozott.leakt",
             artifactId = "compiler-plugin",
-            version = compilerPluginVersion
+            version = leaktVersion
         )
     }
 
     override fun applyToCompilation(kotlinCompilation: KotlinCompilation<*>): Provider<List<SubpluginOption>> {
-        val project = kotlinCompilation.target.project
-
-        // When building from the monorepo, use the local compiler plugin project directly so
-        // test compilations can resolve it without publishing first.
-        val compilerPluginProject = project.rootProject.findProject(":compiler-plugin")
-        if (compilerPluginProject != null) {
-            project.dependencies.add(
-                "kotlinCompilerPluginClasspath${kotlinCompilation.target.name.replaceFirstChar { it.uppercase() }}${kotlinCompilation.name.replaceFirstChar { it.uppercase() }}",
-                compilerPluginProject
-            )
-        }
-
-        return project.provider { emptyList<SubpluginOption>() }
+        return kotlinCompilation.target.project.provider { emptyList() }
     }
 
     private fun configureRuntimeDependency(
         project: Project,
         kotlin: KotlinMultiplatformExtension,
     ) {
-        // LeakSanitizer access lives in :core. Prefer the local project in this repository, but
-        // fall back to a published artifact when the plugin is consumed externally.
-        val runtimeDependency = project.rootProject.findProject(":core")?.let {
-            project.dependencies.project(mapOf("path" to ":core"))
-        } ?: "dev.jozott.leakt:core:${project.version}"
+        val runtimeDependency = "dev.jozott.leakt:core:$leaktVersion"
 
         // Add the runtime to every test source set so both manual `withLeakCheck` calls and
         // compiler-rewritten `@LeakCheck` usages can resolve the runtime symbols.
