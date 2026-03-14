@@ -1,0 +1,74 @@
+name: DEV Release
+
+on:
+    push:
+        tags:
+            - "v*"
+
+permissions:
+    contents: read
+
+concurrency:
+    group: dev-release-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    publish-dev:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Set up Java
+              uses: actions/setup-java@v4
+              with:
+                  distribution: temurin
+                  java-version: "21"
+
+            - name: Set up Gradle
+              uses: gradle/actions/setup-gradle@v4
+
+            - name: Validate tag matches VERSION
+              run: |
+                  tag_version="${GITHUB_REF_NAME#v}"
+                  repo_version="$(tr -d '\n' < VERSION)"
+                  version_pattern='^[0-9]+\.[0-9]+\.[0-9]+-DEV-[1-9][0-9]*$'
+
+                  if ! [[ "$tag_version" =~ $version_pattern ]]; then
+                    echo "Tag version '$tag_version' is not a valid DEV version"
+                    exit 1
+                  fi
+
+                  if ! [[ "$repo_version" =~ $version_pattern ]]; then
+                    echo "VERSION '$repo_version' is not a valid DEV version"
+                    exit 1
+                  fi
+
+                  if [ "$tag_version" != "$repo_version" ]; then
+                    echo "Tag version '$tag_version' does not match VERSION '$repo_version'"
+                    exit 1
+                  fi
+
+            - name: Run tests
+              run: ./gradlew :test:check
+
+            - name: Publish DEV artifacts to build/repo
+              run: ./gradlew :core:publish :compiler-plugin:publish :gradle-plugin:publish
+
+            - name: Smoke-check published repository
+              run: |
+                  version="$(tr -d '\n' < VERSION)"
+
+                  test -f "build/repo/dev/jozott/leakt/core/$version/core-$version.pom"
+                  test -f "build/repo/dev/jozott/leakt/core-linuxx64/$version/core-linuxx64-$version.klib"
+                  test -f "build/repo/dev/jozott/leakt/compiler-plugin/$version/compiler-plugin-$version.jar"
+                  test -f "build/repo/dev/jozott/leakt/gradle-plugin/$version/gradle-plugin-$version.jar"
+                  test -f "build/repo/dev/jozott/leakt/dev.jozott.leakt.gradle.plugin/$version/dev.jozott.leakt.gradle.plugin-$version.pom"
+
+            - name: Upload published repository
+              uses: actions/upload-artifact@v4
+              with:
+                  name: dev-release-repo-${{ github.ref_name }}
+                  path: build/repo
+                  if-no-files-found: error
