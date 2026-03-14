@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink
 
 plugins {
-    id("org.jetbrains.kotlin.multiplatform")
+    id("leakt-kmp")
     id("dev.jozott.leakt")
 }
 

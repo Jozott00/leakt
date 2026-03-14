@@ -3,6 +3,7 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
+    includeBuild("gradle-conventions")
     includeBuild("gradle-plugin")
 }
 

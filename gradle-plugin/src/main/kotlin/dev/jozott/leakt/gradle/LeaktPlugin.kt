@@ -10,6 +10,16 @@ import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 import java.io.File
 
 class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
+    private val compilerPluginVersion: String by lazy(LazyThreadSafetyMode.NONE) {
+        javaClass
+            .getResourceAsStream("/dev/jozott/leakt/gradle/leakt.properties")
+            ?.use { stream ->
+                java.util.Properties().apply { load(stream) }.getProperty("version")
+            }
+            ?.takeIf { it.isNotBlank() }
+            ?: error("Missing compiler plugin version metadata")
+    }
+
     override fun apply(project: Project) {
         project.pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
             val kotlin = project.extensions.getByType(KotlinMultiplatformExtension::class.java)
@@ -35,7 +45,7 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
         return SubpluginArtifact(
             groupId = "dev.jozott.leakt",
             artifactId = "compiler-plugin",
-            version = "0.1.0-SNAPSHOT"
+            version = compilerPluginVersion
         )
     }
 

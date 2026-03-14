@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm")
+    id("leakt-jvm")
 }
 
 dependencies {

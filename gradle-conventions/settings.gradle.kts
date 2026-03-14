@@ -3,7 +3,6 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
-    includeBuild("../gradle-conventions")
 }
 
 dependencyResolutionManagement {
@@ -18,4 +17,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "gradle-plugin"
+rootProject.name = "gradle-conventions"
