@@ -7,9 +7,9 @@ plugins {
 }
 
 kotlin {
-    explicitApi()
-
     linuxX64()
+
+    applyDefaultHierarchyTemplate()
 
     sourceSets {
         nativeTest {
@@ -65,8 +65,6 @@ val buildFfiLeaksNativeLib by tasks.registering {
 
 kotlin.targets.withType<KotlinNativeTarget>().configureEach {
     compilations.getByName("test").apply {
-        defaultSourceSet.dependsOn(kotlin.sourceSets.getByName("nativeTest"))
-
         cinterops.create("ffileaks") {
             defFile(project.file("src/nativeInterop/cinterop/ffileaks.def"))
             compilerOpts("-I${project.file("src/nativeInterop/cinterop").absolutePath}")
