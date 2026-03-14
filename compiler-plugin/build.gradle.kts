@@ -1,5 +1,6 @@
 plugins {
     id("leakt-jvm")
+    id("leakt-publish")
 }
 
 dependencies {

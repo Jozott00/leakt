@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 plugins {
     id("leakt-kmp")
+    id("leakt-publish")
 }
 
 kotlin {

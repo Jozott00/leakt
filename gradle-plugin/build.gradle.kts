@@ -1,5 +1,6 @@
 plugins {
     id("leakt-gradle-plugin")
+    id("leakt-publish")
 }
 
 dependencies {
