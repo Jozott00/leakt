@@ -1,10 +1,11 @@
 # Leakt
 
-`Leakt` is a first working prototype of a Kotlin/Native runtime library plus Gradle plugin that uses LLVM LeakSanitizer (LSan) to detect native leaks inside the test process.
+`Leakt` is a first working prototype of a Kotlin/Native runtime library, compiler plugin, and Gradle plugin that uses LLVM LeakSanitizer (LSan) to detect native leaks inside the test process.
 
-The project has three components:
+The project has four components:
 
 - `core`: Kotlin Multiplatform runtime with LSan bindings and a Kotlin API.
+- `compiler-plugin`: Kotlin compiler plugin that rewrites `@LeakCheck` functions to call the runtime leak-check wrapper.
 - `gradle-plugin`: Gradle plugin that enables sanitizer flags and injects the runtime dependency into native test source sets.
 - `test`: Sample Kotlin/Native test project that demonstrates leak detection with C interop allocations.
 
@@ -14,11 +15,14 @@ The project has three components:
 The Gradle plugin applies compiler instrumentation and sanitizer wiring for native test code, that influences performance
 negatively.
 
+The `@LeakCheck` annotation and `withLeakCheck` API are available on all targets, but actual leak detection currently only
+executes for `linuxX64Test` runs. On other targets, the API remains callable but behaves as a no-op.
+
 ## Requirements
 
 - Kotlin `2.3.10`
 - Gradle `9.2.1`
-- Kotlin/Native host support on `linuxX64`, `macosX64`, or `macosArm64`
+- A Linux `x86_64` host to run `linuxX64Test` with LeakSanitizer enabled
 - A toolchain that can link AddressSanitizer and LeakSanitizer
 
 ## How It Works
@@ -31,6 +35,7 @@ negatively.
 
 The runtime disables LSan by default and enables it only for the body passed to `withLeakCheck`.  
 After the body finishes, it performs an in-process recoverable leak check and throws `LeakDetectedException` if leaks are reported.
+That runtime leak check is only active in `linuxX64Test` execution.
 
 The compiler plugin rewrites `@LeakCheck` functions to call `withLeakCheck(reporting) { ... }`.
 
@@ -60,7 +65,13 @@ withLeakCheck(reporting = LeakReporting.REPEAT) {
 }
 ```
 
-`FIRST_ONLY` (default) suppresses repeated reports after the first detected leak in the same process.
+LeakSanitizer state is process-global. Once one test leaks, later leak checks in the same test process can keep observing that
+same leak, which quickly turns the output noisy and repetitive.
+
+`FIRST_ONLY` is therefore the default: it reports the first detected leak in a process and suppresses repeated reports after
+that. In practice, this means that if one test already detected a leak, a later executed test that also leaks will not fail
+just because it leaked as well; the repeated report is suppressed for the rest of that process. Use `REPEAT` when you
+explicitly want every leak-check scope to report again, even after an earlier failure.
 
 ## Important Constraint
 
@@ -89,4 +100,4 @@ Useful follow-up commands:
 
 - Once a test leaks native memory, later in-process leak checks may still observe that leak until the test process exits.
 - Leak reports are process-global; there is no runtime reset for already observed leaks.
-- On non-`linuxX64` fallback targets, `withLeakCheck` is currently a no-op.
+- Outside `linuxX64Test`, `withLeakCheck` and `@LeakCheck` remain available but do not trigger leak detection yet.
