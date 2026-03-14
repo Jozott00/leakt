@@ -1,5 +1,7 @@
 # Leakt
 
+[![Latest Version](https://img.shields.io/github/v/tag/Jozott00/leakt?filter=v*-DEV-*&color=006400&label=Latest%20Version)](https://github.com/Jozott00/leakt/tags)
+
 `Leakt` is a first working prototype of a Kotlin/Native runtime library, compiler plugin, and Gradle plugin that uses LLVM LeakSanitizer (LSan) to detect native leaks inside the test process.
 
 The project has four components:
