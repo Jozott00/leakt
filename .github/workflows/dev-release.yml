@@ -7,6 +7,7 @@ on:
 
 permissions:
     contents: read
+    packages: write
 
 concurrency:
     group: dev-release-${{ github.ref }}
@@ -53,7 +54,10 @@ jobs:
             - name: Run tests
               run: ./gradlew :test:check
 
-            - name: Publish DEV artifacts to build/repo
+            - name: Publish DEV artifacts
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_PACKAGES_REPOSITORY: ${{ github.repository }}
               run: ./gradlew :core:publish :compiler-plugin:publish :gradle-plugin:publish
 
             - name: Smoke-check published repository
