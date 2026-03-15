@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.targets.jvm.KotlinJvmTarget
 
 plugins {
     id("leakt-common")
@@ -11,7 +12,9 @@ kotlin {
 
     jvmToolchain(17)
 
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_1_8)
+    targets.withType<KotlinJvmTarget>().configureEach {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_1_8)
+        }
     }
 }
