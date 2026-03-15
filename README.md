@@ -27,6 +27,53 @@ executes for `linuxX64Test` runs. On other targets, the API remains callable but
 - A Linux `x86_64` host to run `linuxX64Test` with LeakSanitizer enabled
 - A toolchain that can link AddressSanitizer and LeakSanitizer
 
+## Use In A Project
+
+Use the latest DEV version from the badge above.
+
+Add the GitHub Packages repository in `settings.gradle.kts`:
+
+```kotlin
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven("https://maven.pkg.github.com/Jozott00/leakt") {
+            credentials {
+                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
+                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+        maven("https://maven.pkg.github.com/Jozott00/leakt") {
+            credentials {
+                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
+                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
+```
+
+Apply the plugin in your multiplatform project:
+
+```kotlin
+plugins {
+    kotlin("multiplatform") version "2.3.10"
+    id("dev.jozott.leakt") version "<latest-version>"
+}
+
+kotlin {
+    linuxX64()
+}
+```
+
+Then annotate native test functions or call `withLeakCheck` manually. The plugin adds the `core` runtime to test source sets automatically.
+
 ## How It Works
 
 `Leakt` wraps the following LeakSanitizer APIs through Kotlin/Native cinterop:
