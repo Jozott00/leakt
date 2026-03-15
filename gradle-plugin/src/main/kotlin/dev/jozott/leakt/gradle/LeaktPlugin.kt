@@ -1,5 +1,6 @@
 package dev.jozott.leakt.gradle
 
+
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
@@ -21,23 +22,23 @@ class LeaktPlugin : Plugin<Project>, KotlinCompilerPluginSupportPlugin {
             ?: error("Missing compiler plugin version metadata")
     }
 
-    override fun apply(project: Project) {
-        project.pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
-            val kotlin = project.extensions.getByType(KotlinMultiplatformExtension::class.java)
+    override fun apply(target: Project) {
+        target.pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
+            val kotlin = target.extensions.getByType(KotlinMultiplatformExtension::class.java)
 
             // The Gradle plugin has two responsibilities:
             // 1. make the Leakt runtime available to test source sets
             // 2. wire Linux native test binaries/tasks for LeakSanitizer execution
-            configureRuntimeDependency(project, kotlin)
-            configureNativeLinkTasks(project)
-            configureNativeTests(project)
+            configureRuntimeDependency(target, kotlin)
+            configureNativeLinkTasks(target)
+            configureNativeTests(target)
         }
     }
 
     override fun isApplicable(kotlinCompilation: KotlinCompilation<*>): Boolean {
-        val target = kotlinCompilation.target as? KotlinNativeTarget ?: return false
+        val nativeTarget = kotlinCompilation.target as? KotlinNativeTarget ?: return false
         // The prototype currently only supports Linux native test compilations.
-        return target.konanTarget.name.lowercase() == "linux_x64" && kotlinCompilation.name == "test"
+        return nativeTarget.konanTarget.name.lowercase() == "linux_x64" && kotlinCompilation.name == "test"
     }
 
     override fun getCompilerPluginId(): String = "dev.jozott.leakt"
